@@ -1,0 +1,5 @@
+
+    POST: to create data.
+    GET: to read data.
+    PUT: to update data.
+    DELETE: to delete data.
