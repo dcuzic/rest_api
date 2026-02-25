@@ -1,19 +1,14 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
+from models import Booking
 
 count_file = "count.txt"
-
-class Booking(BaseModel):
-    name: str
-    date: str
 
 app = FastAPI()
 
 bookings = []
 id_count = 1
 
-# це ніби працює no idea how tho 
+# posts new booking - works
 @app.post("/booking/")
 def create_booking(booking: Booking):
     booking_dict = booking.dict()
@@ -35,12 +30,12 @@ def create_booking(booking: Booking):
     print(booking_dict)
     return booking_dict
 
-# це працює
+# gets a list of all the bookings - works
 @app.get("/booking/")
 def all_bookings():
     return bookings
 
-# пише booking not found, Тому працюєм над цим  
+# returns booking details by booking ID - works
 @app.get("/booking/{booking_id}")
 def id(booking_id: int):
     for booking in bookings:
@@ -50,7 +45,7 @@ def id(booking_id: int):
     else:
         raise HTTPException(status_code=404, detail="Booking not found")
         
-# працює but when post new booking ids mix up, it creates new booking counting its order based on bookings before
+# deletes booking - works
 @app.delete("/bookings/{booking_id}")
 def delete_booking(booking_id: int):
     for booking in bookings:
