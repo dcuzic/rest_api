@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from models import Booking
+import sqlite3
 
 count_file = "count.txt"
 
@@ -7,6 +8,32 @@ app = FastAPI()
 
 bookings = []
 id_count = 1
+
+# DATABASE
+conn = sqlite3.connect("database.db")
+cursor = conn.cursor()
+
+def create_table():
+    cursor.execute("""
+                   CREATE TABLE IF NOT EXISTS bookings (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT
+                   name TEXT NOT NULL
+                   date TEXT NOT NULL
+                   )              
+                   """)
+    conn.commit()
+
+# new booking - line 29, in create_booking
+#   cursor.execute("""
+#                  ^^^
+# TypeError: 'str' object is not callable
+@app.post("/bookings/")
+def create_booking(booking_name, booking_date):
+    cursor.execute("""
+                   INSERT INTO bookings (name, date)
+                   VALUES (?, ?)"""
+                   (booking_name, booking_date)
+                   )
 
 # posts new booking - works
 @app.post("/booking/")
@@ -33,7 +60,7 @@ def create_booking(booking: Booking):
 # gets a list of all the bookings - works
 @app.get("/booking/")
 def all_bookings():
-    return bookings
+    cursor.execute("""FROM """)
 
 # returns booking details by booking ID - works
 @app.get("/booking/{booking_id}")
