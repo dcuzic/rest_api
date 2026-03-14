@@ -7,6 +7,10 @@ class Booking(BaseModel):
 
 app = FastAPI()
 
+# database
+
+
+
 bookings = []
 
 @app.post("/bookings/")
