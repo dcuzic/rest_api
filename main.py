@@ -7,6 +7,7 @@ app = FastAPI()
 def create_table():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
+    
     cursor.execute("""
                    CREATE TABLE IF NOT EXISTS bookings (
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,6 +15,7 @@ def create_table():
                    date TEXT NOT NULL
                    )              
                    """)
+    
     conn.commit()
     conn.close()
 
@@ -24,11 +26,13 @@ create_table()
 def create_booking(booking_name, booking_date):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
+
     cursor.execute("""
                    INSERT INTO bookings (name, date)
                    VALUES (?, ?)""",
                    (booking_name, booking_date)
                    )
+    
     conn.commit()
     conn.close()
     return {"booking successfully created"}
@@ -38,7 +42,9 @@ def create_booking(booking_name, booking_date):
 def delete_booking(booking_id):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
+
     cursor.execute("""DELETE FROM bookings WHERE id = ?""", (booking_id,))
+
     conn.commit()
     conn.close()
     return {f"booking no {booking_id} successfully deleted"}
@@ -49,27 +55,31 @@ def all_bookings():
     conn = sqlite3.connect("database.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
     cursor.execute("SELECT * FROM bookings")
     rows = cursor.fetchall()
     data = [dict(row) for row in rows]
+
     conn.close()
     return {
         "message": "here are all the bookings in the system right now",
         "data": data
     }
 
-# needs fixing, working on how to make sqlite check if input id is in database,
-# if yes return id details 
-@app.get("/booking/{booking_id}/")
+# returns booking info by id, works
+@app.get("/bookings/{booking_id}/")
 def search_booking(booking_id):
     conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    for booking in bookings:
-        if booking["id"] in bookings:
-            cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
-            booking_info = cursor.fetchall()
-        else:
-            raise HTTPException(status_code=404, detail="booking not found")
+
+    cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
+    row = cursor.fetchone()
+    booking_info = [dict(row)]
+
+    if booking_info is None:
+        raise HTTPException(status_code=404, detail="booking not found")
+
     conn.close()
     return booking_info
 
