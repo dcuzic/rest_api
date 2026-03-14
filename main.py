@@ -3,11 +3,10 @@ import sqlite3
 
 app = FastAPI()
 
-# maybe doesnt work
 def create_table():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-    
+
     cursor.execute("""
                    CREATE TABLE IF NOT EXISTS bookings (
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
