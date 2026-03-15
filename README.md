@@ -6,6 +6,11 @@ The app can:
 * View all the bookings in in-memory storage
 * Delete a booking
 
+Tech stack:
+- Python
+- FastAPI
+- SQLite
+
 How to use:
 1. `http://127.0.0.1:8000/booking` - to see all the bookings
 2. `http://127.0.0.1:8000/booking/86` - to see booking details. `86` is booking's ID assigned automatically when a booking is created via POST
