@@ -75,9 +75,10 @@ def search_booking(booking_id):
 
     cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
     row = cursor.fetchone()
-    booking_info = [dict(row)]
 
-    if booking_info is None:
+    if row is not None:
+        booking_info = [dict(row)] 
+    else:
         raise HTTPException(status_code=404, detail="booking not found")
 
     conn.close()
