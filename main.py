@@ -12,7 +12,8 @@ def create_table():
                    CREATE TABLE IF NOT EXISTS bookings (
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                    name TEXT NOT NULL,
-                   date TEXT NOT NULL
+                   date TEXT NOT NULL,
+                   user_id INTEGER
                    )              
                    """)
     
