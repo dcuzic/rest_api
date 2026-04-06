@@ -1,10 +1,12 @@
 from jose import jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
 import bcrypt
+import sqlite3
 from database import db_conn
-
+from models import User
 
 def create_table_users():
     conn = db_conn()
@@ -48,29 +50,38 @@ def create_token(data: dict):
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# login
-def login(username, password):
-    conn = db_conn()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
-    user = cursor.fetchone()
-    conn.close()
-
-    if user and verify_password(password, user[2]):
-        return create_token(user[0])
-    
-    return None
-
 # register - working
-def register(username: str, password: str):
+@app.post("/register")
+def register(user: User):
     conn = db_conn()
     cursor = conn.cursor()
 
-    hashed = hash_password(password)
-    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed))
+    hashed = hash_password(user.password)
 
-    conn.commit()
+    try: 
+        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user.username, hashed))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"Username {user.username} already exists, please choose another username.")
+    conn.close()
+    return f"User {user.username} successfully registered!"
+
+#login
+@app.post("/login")
+def login(user: User):
+    conn = db_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM users WHERE username = ?", (user.username,))
+    user_check = cursor.fetchone()
     conn.close()
 
-    return f"User named {username} successfully registered"
+    if not user_check or not verify_password(user.password, user_check["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    token = create_token({"user_id": user_check["id"]})
+    return {"access_token": token}
+
+# 
