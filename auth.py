@@ -31,6 +31,7 @@ ALGORITHM = "HS256"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+
 # password
 def hash_password(password: str):
     password_bytes = password.encode("utf-8")[:72]
@@ -49,6 +50,21 @@ def create_token(data: dict):
     to_encode.update({"exp": expire})
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# current_user token - needs testing
+oauth2_var = OAuth2PasswordBearer(tokenUrl="login")
+
+def current_token(token: str = Depends(oauth2_var)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["ALGORITHM"])
+        user_id = payload.get("user_id")
+
+        if user_id == None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    
+    except:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # register - working
 @app.post("/register")
@@ -83,5 +99,3 @@ def login(user: User):
     
     token = create_token({"user_id": user_check["id"]})
     return {"access_token": token}
-
-# 
