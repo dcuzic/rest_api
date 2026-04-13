@@ -99,3 +99,7 @@ def login(user: User):
     
     token = create_token({"user_id": user_check["id"]})
     return {"access_token": token}
+
+@app.get("/protected")
+def protected():
+    return 
