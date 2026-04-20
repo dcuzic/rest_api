@@ -2,7 +2,7 @@ from jose import jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, HTTPBearer
 import bcrypt
 import sqlite3
 from database import db_conn
@@ -52,7 +52,7 @@ def create_token(data: dict):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # current_user token - needs testing
-oauth2_var = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_var = HTTPBearer()
 
 def current_token(token: str = Depends(oauth2_var)):
     try:
@@ -98,8 +98,10 @@ def login(user: User):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_token({"user_id": user_check["id"]})
-    return {"access_token": token}
+    return {"access_token": token,
+            "token_type": "bearer"
+            }
 
 @app.get("/protected")
-def protected():
-    return 
+def protected(token=Depends(oauth2_var)):
+    return {"token": token.credentials}  
