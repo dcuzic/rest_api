@@ -1,4 +1,4 @@
-from jose import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends
@@ -42,7 +42,7 @@ def verify_password(plain: str, hashed: str):
     password_bytes = plain.encode("utf-8")[:72]
     return bcrypt.checkpw(password_bytes, hashed.encode("utf-8"))
 
-# token
+# token creation + check
 def create_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(hours=1)
@@ -51,22 +51,21 @@ def create_token(data: dict):
 
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# current_user token - needs testing
 oauth2_var = HTTPBearer()
 
-def current_token(token: str = Depends(oauth2_var)):
+def current_token(token = Depends(oauth2_var)):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["ALGORITHM"])
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("user_id")
 
         if user_id == None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(status_code=401, detail="401 Invalid token")
         return user_id
     
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="401 Invalid token")
 
-# register - working
+# register - change to while 
 @app.post("/register")
 def register(user: User):
     conn = db_conn()
@@ -102,6 +101,7 @@ def login(user: User):
             "token_type": "bearer"
             }
 
+# protected endpoint - needs a valid token to enter
 @app.get("/protected")
-def protected(token=Depends(oauth2_var)):
-    return {"token": token.credentials}  
+def protected(user_id: int = Depends(current_token)):
+    return {"msg": f"user {user_id} successfully authorized"}  
