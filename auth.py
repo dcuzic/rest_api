@@ -1,7 +1,7 @@
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, APIRouter
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer
 import bcrypt
 import sqlite3
@@ -24,7 +24,7 @@ def create_table_users():
 
 create_table_users()
 
-app = FastAPI()
+router = APIRouter(prefix="/auth")
 
 SECRET_KEY = "1e038aa16fdc2c17a4eab16b85085d58e4c52617973ca8573aa828a0070a8c7e"
 ALGORITHM = "HS256"
@@ -66,7 +66,7 @@ def current_token(token = Depends(oauth2_var)):
         raise HTTPException(status_code=401, detail="401 Invalid token")
 
 # register - change to while 
-@app.post("/register")
+@router.post("/register")
 def register(user: User):
     conn = db_conn()
     cursor = conn.cursor()
@@ -83,7 +83,7 @@ def register(user: User):
     return f"User {user.username} successfully registered!"
 
 #login
-@app.post("/login")
+@router.post("/login")
 def login(user: User):
     conn = db_conn()
     conn.row_factory = sqlite3.Row
@@ -102,6 +102,6 @@ def login(user: User):
             }
 
 # protected endpoint - needs a valid token to enter
-@app.get("/protected")
+@router.get("/protected")
 def protected(user_id: int = Depends(current_token)):
-    return {"msg": f"user {user_id} successfully authorized"}  
+    return user_id

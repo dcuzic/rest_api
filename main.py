@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from auth import router as auth_router, protected
 import sqlite3
 
 app = FastAPI()
+app.include_router(auth_router)
 
 # maybe doesnt work
 def create_table():
@@ -13,7 +15,7 @@ def create_table():
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                    name TEXT NOT NULL,
                    date TEXT NOT NULL,
-                   user_id INTEGER
+                   user_id NOT NULL
                    )              
                    """)
     
@@ -24,31 +26,43 @@ create_table()
 
 # adds booking, works
 @app.post("/bookings/")
-def create_booking(booking_name, booking_date):
+def create_booking(booking_name, booking_date, user_id = Depends(protected)):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
 
+
+
     cursor.execute("""
-                   INSERT INTO bookings (name, date)
-                   VALUES (?, ?)""",
-                   (booking_name, booking_date)
+                   INSERT INTO bookings (name, date, user_id)
+                   VALUES (?, ?, ?)""",
+                   (booking_name, booking_date, user_id)
                    )
     
     conn.commit()
     conn.close()
-    return {"booking successfully created"}
+    return {f"booking successfully created, {user_id}"}
 
 # deletes booking from database, works
 @app.delete("/bookings")
-def delete_booking(booking_id):
+def delete_booking(booking_id, user_id = Depends(protected)):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-
-    cursor.execute("""DELETE FROM bookings WHERE id = ?""", (booking_id,))
-
-    conn.commit()
-    conn.close()
-    return {f"booking no {booking_id} successfully deleted"}
+    
+    cursor.execute("SELECT * FROM bookings WHERE user_id = ?", (user_id,))
+    current_user_bookings = cursor.fetchone()
+    if booking_id in current_user_bookings:
+        cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
+        delete_result = cursor.fetchone()
+        if delete_result == None:
+            conn.close()
+            raise HTTPException(status_code=404, detail="404 booking not found")
+        else:
+            cursor.execute("""DELETE FROM bookings WHERE id = ?""", (booking_id,))
+            conn.commit()
+            conn.close()
+            return {f"booking no {booking_id} successfully deleted", user_id}
+    else:
+        raise HTTPException(status_code=403, detail="403 forbidden")
 
 # returns all bookings in database, works
 @app.get("/bookings/")
@@ -84,4 +98,6 @@ def search_booking(booking_id):
 
     conn.close()
     return booking_info
+
+
 
