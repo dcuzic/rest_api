@@ -14,6 +14,7 @@ def create_table_users():
 
     cursor.execute("""CREATE TABLE IF NOT EXISTS users (
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   role TEXT,
                    username TEXT UNIQUE,
                    password TEXT
                    )
@@ -70,11 +71,11 @@ def current_token(token = Depends(oauth2_var)):
 def register(user: User):
     conn = db_conn()
     cursor = conn.cursor()
-
+    
     hashed = hash_password(user.password)
 
     try: 
-        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (user.username, hashed))
+        cursor.execute("INSERT INTO users (role, username, password) VALUES (?, ?, ?)", ("User", user.username, hashed))
         conn.commit()
     except sqlite3.IntegrityError:
         conn.close()
@@ -104,4 +105,35 @@ def login(user: User):
 # protected endpoint - needs a valid token to enter
 @router.get("/protected")
 def protected(user_id: int = Depends(current_token)):
+
     return user_id
+
+
+def add_admin(user: User):
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    hashed = hash_password(user.password)
+    cursor.execute("INSERT INTO users (role, username, password) VALUES (?, ?, ?)", ("Admin", "Admin", hashed))
+    conn.commit()
+    conn.close()
+
+def check_admins():
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM users WHERE role = ?", ("Admin",))
+    admin_result = cursor.fetchone()
+
+    if admin_result == None:
+        add_admin(User(username="Admin", password="123321"))
+        cursor.execute("SELECT id FROM users WHERE role = ?", ("Admin",))
+        admin_id = cursor.fetchone()
+
+        conn.commit()
+        conn.close()
+        return {"msg":f"admin successfully created, id {admin_id}"}
+    else:
+        return
+    
+check_admins()
