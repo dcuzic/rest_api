@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends
 from auth import router as auth_router, protected
+from database import db_conn
 import sqlite3
 
 app = FastAPI()
 app.include_router(auth_router)
 
-# maybe doesnt work
+# bookings database
 def create_table():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
@@ -24,13 +25,21 @@ def create_table():
 
 create_table()
 
+@app.get("/admin")
+def check_user_role(user_id = Depends(protected)):
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+    role_result = cursor.fetchone()
+
+    return role_result[0]
+
 # adds booking, works
 @app.post("/bookings/")
 def create_booking(booking_name, booking_date, user_id = Depends(protected)):
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-
-
 
     cursor.execute("""
                    INSERT INTO bookings (name, date, user_id)
@@ -66,19 +75,28 @@ def delete_booking(booking_id, user_id = Depends(protected)):
 
 # returns all bookings in database, works
 @app.get("/bookings/")
-def all_bookings():
+def all_bookings(user_id: int = Depends(protected)):
     conn = sqlite3.connect("database.db")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM bookings")
+    role = check_user_role(user_id)
+
+    if not role :
+        conn.close()
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if role == "Admin":
+        cursor.execute("SELECT * FROM bookings")
+    else:
+        cursor.execute("SELECT * FROM bookings WHERE user_id = ?", (user_id,))
+    
     rows = cursor.fetchall()
     data = [dict(row) for row in rows]
-
     conn.close()
     return {
-        "message": "here are all the bookings in the system right now",
-        "data": data
+    "message": "bookings in the system right now",
+    "data": data
     }
 
 # returns booking info by id, works
