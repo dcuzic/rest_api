@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from auth import router as auth_router, protected
 from database import db_conn
 import sqlite3
@@ -8,7 +8,7 @@ app.include_router(auth_router)
 
 # bookings database
 def create_table():
-    conn = sqlite3.connect("database.db")
+    conn = db_conn()
     cursor = conn.cursor()
     
     cursor.execute("""
@@ -25,6 +25,7 @@ def create_table():
 
 create_table()
 
+# checks user role (User, Admin)
 @app.get("/admin")
 def check_user_role(user_id = Depends(protected)):
     conn = db_conn()
@@ -33,50 +34,74 @@ def check_user_role(user_id = Depends(protected)):
     cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
     role_result = cursor.fetchone()
 
+    conn.close()
+
     return role_result[0]
 
-# adds booking, works
+# adds booking, users can only create bookings for current user
 @app.post("/bookings/")
-def create_booking(booking_name, booking_date, user_id = Depends(protected)):
-    conn = sqlite3.connect("database.db")
+def create_booking(booking_name, 
+                   booking_date, 
+                   user_id = Depends(protected), 
+                   target_user_id: int | None = Query(
+                       default=None,
+                       description="ADMIN ONLY: Create booking for any user"
+                   )
+                   ):
+    conn = db_conn()
     cursor = conn.cursor()
+
+    role = check_user_role(user_id)
+
+    if target_user_id is not None and role != "Admin":
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+
+    if role == "Admin" and target_user_id:
+        final_user_id = target_user_id
+    else:
+        final_user_id = user_id
 
     cursor.execute("""
                    INSERT INTO bookings (name, date, user_id)
                    VALUES (?, ?, ?)""",
-                   (booking_name, booking_date, user_id)
+                   (booking_name, booking_date, final_user_id)
                    )
     
     conn.commit()
     conn.close()
-    return {f"booking successfully created, {user_id}"}
+    return {"msg":f"booking successfully created for user {final_user_id}"}
 
-# deletes booking from database, works
+# deletes booking from database users can only delete their bookings
 @app.delete("/bookings")
-def delete_booking(booking_id, user_id = Depends(protected)):
-    conn = sqlite3.connect("database.db")
+def delete_booking(booking_id: int, user_id: int = Depends(protected)):
+    conn = db_conn()
     cursor = conn.cursor()
-    
-    cursor.execute("SELECT * FROM bookings WHERE user_id = ?", (user_id,))
-    current_user_bookings = cursor.fetchone()
-    if booking_id in current_user_bookings:
-        cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
-        delete_result = cursor.fetchone()
-        if delete_result == None:
-            conn.close()
-            raise HTTPException(status_code=404, detail="404 booking not found")
-        else:
-            cursor.execute("""DELETE FROM bookings WHERE id = ?""", (booking_id,))
-            conn.commit()
-            conn.close()
-            return {f"booking no {booking_id} successfully deleted", user_id}
-    else:
-        raise HTTPException(status_code=403, detail="403 forbidden")
 
-# returns all bookings in database, works
+    cursor.execute("SELECT user_id FROM bookings WHERE id = ?", (booking_id,))
+    booking = cursor.fetchone()
+
+    if not booking:
+        conn.close()
+        raise HTTPException(status_code=404, detail="404 Booking not found")
+    
+    booking_owner_id = booking[0]
+
+    role = check_user_role(user_id)
+
+    if role != "Admin" and booking_owner_id != user_id:
+        conn.close()
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("DELETE FROM bookings WHERE id =?", (booking_id,))
+    conn.commit()
+    conn.close()
+
+    return {"msg":f"booking {booking_id} successfully deleted!"}
+
+# returns all bookings in database, users can see only their bookings
 @app.get("/bookings/")
 def all_bookings(user_id: int = Depends(protected)):
-    conn = sqlite3.connect("database.db")
+    conn = db_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -99,23 +124,129 @@ def all_bookings(user_id: int = Depends(protected)):
     "data": data
     }
 
-# returns booking info by id, works
+# returns booking info by id, users can only see their bookings
 @app.get("/bookings/{booking_id}/")
-def search_booking(booking_id):
-    conn = sqlite3.connect("database.db")
+def search_booking(booking_id: int, user_id: int = Depends(protected)):
+    conn = db_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
-    row = cursor.fetchone()
+    cursor.execute("SELECT user_id FROM bookings WHERE id = ?", (booking_id,))
+    booking = cursor.fetchone()
 
-    if row is not None:
-        booking_info = [dict(row)] 
-    else:
-        raise HTTPException(status_code=404, detail="booking not found")
+    if not booking:
+        conn.close()
+        raise HTTPException(status_code=404, detail="404 Booking not found")
+    
+    booking_owner_id = booking[0]
+
+    role = check_user_role(user_id)
+
+    if role != "Admin" and booking_owner_id != user_id:
+        conn.close()
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,))
+    search_result = cursor.fetchone()
+
+    if search_result is not None:
+        booking_info = [dict(search_result)] 
 
     conn.close()
     return booking_info
 
 
+# ADMIN:
 
+# delete user
+@app.delete("/admin/delete_user")
+def delete_user(user_id: int = Depends(protected),
+                target_user_id: int | None = Query(
+                    default=None,
+                    description="ADMIN ONLY: Delete user")
+                ):
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    role = check_user_role(user_id)
+
+    if target_user_id is not None and role != "Admin":
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
+    
+    conn.commit()
+    conn.close()
+
+    return {"msg":f"user {target_user_id} successfully deleted"}
+
+# create admin
+@app.post("/admin/create_admin")
+def create_admin(user_id: int = Depends(protected),
+                 target_user_id: int | None = Query(
+                     default=None,
+                     description="ADMIN ONLY: Create new admin"
+                 )):
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    role = check_user_role(user_id)
+
+    if target_user_id is not None and role != "Admin":
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("SELECT * FROM users WHERE id = ?", (target_user_id,))
+    target_result = cursor.fetchall()
+
+    if not target_result:
+        raise HTTPException(status_code=404, detail="404 User not found")
+    
+    cursor.execute("SELECT role FROM users WHERE id = ?", (target_user_id,))
+    user_role = cursor.fetchone()[0]
+
+    if user_role == "Admin":
+        raise HTTPException(status_code=409, detail="409 User is already an administrator")
+    
+    cursor.execute("UPDATE users SET role = ? WHERE id = ?", ("Admin", target_user_id))
+
+    conn.commit()
+    conn.close()
+
+    return {"msg":f"user {target_user_id} is now admin"}
+
+# remove admin
+@app.patch("/admin/remove_admin")
+def remove_admin(user_id: int = Depends(protected),
+                 target_user_id: int | None = Query(
+                     default=None,
+                     description="ADMIN ONLY: Remove admin"
+                 )):
+    conn = db_conn()
+    cursor = conn.cursor()
+
+    role = check_user_role(user_id)
+
+    if target_user_id is not None and role != "Admin":
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("SELECT * FROM users WHERE id = ?", (target_user_id,))
+    target_result = cursor.fetchall()
+
+    if not target_result:
+        raise HTTPException(status_code=404, detail="404 User not found")
+    
+    cursor.execute("SELECT role FROM users WHERE id = ?", (target_user_id,))
+    user_role = cursor.fetchone()[0]
+
+    if user_role == "User":
+        raise HTTPException(status_code=409, detail="409 User is not an administrator")
+    
+    if target_user_id == user_id:
+        raise HTTPException(status_code=403, detail="403 Forbidden")
+    
+    cursor.execute("UPDATE users SET role = ? WHERE id = ?", ("User", target_user_id))
+
+    conn.commit()
+    conn.close()
+
+    return {"msg":f"User {target_user_id} is not admin anymore"}
